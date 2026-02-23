@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+    CartesianGrid,
     Line, LineChart, XAxis, YAxis
 } from 'recharts';
 import ChartCard from '../components/shared/ChartCard';
@@ -16,6 +17,7 @@ const LINE_PROPS = {
     strokeWidth: 1.5,
     strokeDasharray: '4 4',
     dot: false,
+    activeDot: false,
     isAnimationActive: false, // ADDED: disable animation so cards update instantly
 };
 
@@ -32,6 +34,8 @@ const MINI_CHART_PROPS = {
 
 const MiniYoungChart = ({ chartData }) => (
     <LineChart data={chartData} {...MINI_CHART_PROPS}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+
         <XAxis dataKey="phi" hide />
         <YAxis hide domain={['auto', 'auto']} />
         <Line {...LINE_PROPS} dataKey="E" />
@@ -40,6 +44,8 @@ const MiniYoungChart = ({ chartData }) => (
 
 const MiniBulkChart = ({ chartData }) => (
     <LineChart className='border-none border-0' data={chartData} {...MINI_CHART_PROPS}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+
         <XAxis dataKey="phi" hide />
         <YAxis hide domain={['auto', 'auto']} />
         <Line {...LINE_PROPS} dataKey="K" />
@@ -48,6 +54,8 @@ const MiniBulkChart = ({ chartData }) => (
 
 const MiniShearChart = ({ chartData }) => (
     <LineChart data={chartData} {...MINI_CHART_PROPS}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+
         <XAxis dataKey="phi" hide />
         <YAxis hide domain={['auto', 'auto']} />
         <Line {...LINE_PROPS} dataKey="G" />
