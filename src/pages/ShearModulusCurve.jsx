@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+// REMOVED: useLocation — no longer reading from route state
+// ADDED: useChartParams to get live values from sidebar form
 import {
     CartesianGrid,
     Legend,
@@ -11,21 +12,25 @@ import {
     YAxis
 } from 'recharts';
 import FullscreenChart from '../components/shared/FullScreenChart';
+import { useChartParams } from '../contexts/ChartParamsContext';
 import { modulusVsVolumeFractionFormatter } from '../utils/dataFormatterForExcel';
 import { diffScheme } from '../utils/matlabFunctions/diffScheme';
 import { odeRK45 } from '../utils/matlabFunctions/odeRK45';
 
 const ShearModulusCurve = () => {
-    const location = useLocation();
+    // CHANGED: was `const location = useLocation()` + `location.state?.formData`
+    const { em, nm, eb, nb, eta, phi_rpl } = useChartParams();
 
-    const [inputData] = useState(location.state?.formData);
     const [results, setResults] = useState(null);
     const [computing, setComputing] = useState(false);
     const [error, setError] = useState(null);
 
+    // CHANGED: dependency array was [inputData], now tracks all live params
     useEffect(() => {
-        if (!inputData) {
-            setError('No input data available');
+        // CHANGED: was checking `!inputData`; now validates each param from context
+        if ([em, nm, eb, nb, eta, phi_rpl].some(v => isNaN(v) || v === undefined)) {
+            setResults(null);
+            setError('Fill in all sidebar fields (including particle density) to compute.');
             return;
         }
 
@@ -34,29 +39,17 @@ const ShearModulusCurve = () => {
 
         const timer = setTimeout(() => {
             try {
-                const Em = parseFloat(inputData.em);
-                const nm = parseFloat(inputData.nm);
-                const Eb = parseFloat(inputData.eb);
-                const nb = parseFloat(inputData.nb);
-                const eta = parseFloat(inputData.eta);
-                const PHI_RPL = parseFloat(inputData.phi_rpl || 0.6);
-
-                if ([Em, nm, Eb, nb, eta, PHI_RPL].some(v => isNaN(v))) {
-                    throw new Error('Invalid input values');
-                }
-
-                const odefn = (phi, X) =>
-                    diffScheme(phi, X, Eb, nb, eta, PHI_RPL);
+                // CHANGED: was parseFloat(inputData.em) etc.; now using context values directly
+                const odefn = (phi, X) => diffScheme(phi, X, eb, nb, eta, phi_rpl);
 
                 const solution = odeRK45(
                     odefn,
-                    [0, PHI_RPL],
-                    [Em, nm],
+                    [0, phi_rpl], // CHANGED: was hardcoded PHI_RPL from inputData
+                    [em, nm],
                     { dt: 0.001, tol: 1e-8 }
                 );
 
                 const step = 10;
-
                 const PHI = solution.t.filter((_, i) => i % step === 0);
                 const E = solution.y
                     .filter((_, i) => i % step === 0)
@@ -67,7 +60,6 @@ const ShearModulusCurve = () => {
 
                 const G = E.map((e, i) => e / (2 * (1 + Nu[i])));
 
-                // ✅ Clean rounded data
                 const chartData = PHI.map((phi, i) => ({
                     phi: Math.round(phi * 1000) / 1000,
                     G: Math.round(G[i] * 100) / 100
@@ -84,7 +76,6 @@ const ShearModulusCurve = () => {
                         Math.ceil(maxG * 1.05)
                     ]
                 });
-
             } catch (err) {
                 console.error('Computation error:', err);
                 setError(err.message || 'Failed to compute properties');
@@ -94,11 +85,8 @@ const ShearModulusCurve = () => {
         }, 100);
 
         return () => clearTimeout(timer);
-    }, [inputData]);
+    }, [em, nm, eb, nb, eta, phi_rpl]); // CHANGED: was [inputData]
 
-    // ==============================
-    // Custom Tooltip
-    // ==============================
     const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
             return (
@@ -119,9 +107,7 @@ const ShearModulusCurve = () => {
         return (
             <FullscreenChart title="Shear Modulus Curve">
                 <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-xl text-gray-600">
-                        Computing properties...
-                    </div>
+                    <div className="text-xl text-gray-600">Computing properties...</div>
                 </div>
             </FullscreenChart>
         );
@@ -131,7 +117,7 @@ const ShearModulusCurve = () => {
         return (
             <FullscreenChart title="Shear Modulus Curve">
                 <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-xl text-red-600">{error}</div>
+                    <div className="text-lg text-gray-400 text-center px-8">{error}</div>
                 </div>
             </FullscreenChart>
         );
@@ -141,16 +127,13 @@ const ShearModulusCurve = () => {
         return (
             <FullscreenChart title="Shear Modulus Curve">
                 <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-xl text-gray-600">
-                        Preparing chart...
-                    </div>
+                    <div className="text-xl text-gray-600">Preparing chart...</div>
                 </div>
             </FullscreenChart>
         );
     }
 
-    const excelFormattedChartData =
-        modulusVsVolumeFractionFormatter(results.chartData, 'G');
+    const excelFormattedChartData = modulusVsVolumeFractionFormatter(results.chartData, 'G');
 
     return (
         <FullscreenChart
@@ -163,12 +146,10 @@ const ShearModulusCurve = () => {
                     <LineChart data={results.chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
 
-                        {/* ✅ Clean X Axis */}
                         <XAxis
                             dataKey="phi"
                             type="number"
-                            domain={[0, 0.6]}
-                            ticks={[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]}
+                            domain={[0, phi_rpl]} // CHANGED: was hardcoded [0, 0.6]
                             tickFormatter={(value) => value.toFixed(2)}
                             label={{
                                 value: 'Φ (Volume Fraction)',
@@ -177,7 +158,6 @@ const ShearModulusCurve = () => {
                             }}
                         />
 
-                        {/* ✅ Dynamic Y Axis */}
                         <YAxis
                             type="number"
                             domain={results.yDomain}
@@ -207,6 +187,5 @@ const ShearModulusCurve = () => {
         </FullscreenChart>
     );
 };
-
 
 export default ShearModulusCurve;

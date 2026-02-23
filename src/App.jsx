@@ -13,7 +13,9 @@ import YoungModulusCurve2 from './pages/YoungModulusCurve2';
 const App = () => {
   const SIDEBAR_ROUTES = [
     '/charts-menu',
-    '/young-modulus-curve'
+    '/young-modulus-curve',
+    '/bulk-modulus-curve',
+    '/shear-modulus-curve'
   ];
 
   return (
