@@ -91,3 +91,16 @@ button:focus-visible {
 button {
   cursor: pointer;
 }
+
+#root {
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    width: 100%;
+}
+
+html, body {
+    overflow-x: hidden;
+    width: 100%;
+    margin: 0;
+}

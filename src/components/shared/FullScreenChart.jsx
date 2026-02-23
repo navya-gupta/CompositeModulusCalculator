@@ -148,7 +148,7 @@ const FullscreenChart = ({
     return (
         <div
             ref={chartContainerRef}
-            className={`flex flex-col w-full min-h-screen bg-white ${isFullScreen ? 'fixed inset-0 z-50 p-4' : 'p-4'} ${className}`}
+            className={`flex flex-col w-full min-h-screen bg-white ${isFullScreen ? 'fixed inset-0 z-50 p-8' : 'p-8'} ${className}`}
         >
             {/* Title Section */}
             {title && (
