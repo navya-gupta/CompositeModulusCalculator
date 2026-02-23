@@ -124,8 +124,12 @@ const YoungModulusCurve2 = () => {
             watermark={false}
             exportData={excelFormattedChartData}
         >
-            <div className="w-full h-full">
-                <ResponsiveContainer width="100%" height={700}>
+            <div className="w-full"
+                style={{
+                    height: 'calc(100vh - 180px)'
+                }}
+            >
+                <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={results.chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                         <XAxis
