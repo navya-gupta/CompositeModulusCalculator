@@ -195,7 +195,7 @@ const Sidebar2 = ({ collapsed, toggleSidebar, formValues, onFormChange }) => {
 
     return (
         <div
-            className={`${collapsed ? 'w-16' : 'w-72'} the-sidebar min-h-screen bg-[#343a40] text-white shrink-0 transition-all duration-300 flex flex-col`}
+            className={`${collapsed ? 'w-16' : 'w-72'} the-sidebar h-screen bg-[#343a40] text-white shrink-0 transition-all duration-300 flex flex-col`}
         >
             {/* ── Header ── */}
             <div className="flex items-center p-4 border-b border-gray-700 shrink-0">
@@ -218,7 +218,26 @@ const Sidebar2 = ({ collapsed, toggleSidebar, formValues, onFormChange }) => {
 
             {/* ── Scientific Form (hidden when collapsed) ── */}
             {!collapsed && (
-                <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                <div className="form-scroll flex-1 overflow-y-auto px-3 py-4 space-y-1" style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#4b5563 #2a2f35'
+                }}>
+                    <style>{`
+                        .the-sidebar .form-scroll::-webkit-scrollbar {
+                            width: 5px;
+                        }
+                        .the-sidebar .form-scroll::-webkit-scrollbar-track {
+                            background: #2a2f35;
+                            border-radius: 4px;
+                        }
+                        .the-sidebar .form-scroll::-webkit-scrollbar-thumb {
+                            background-color: #4b5563;
+                            border-radius: 4px;
+                        }
+                        .the-sidebar .form-scroll::-webkit-scrollbar-thumb:hover {
+                            background-color: #6b7280;
+                        }
+                    `}</style>
                     {/* Matrix Properties */}
                     <p className="text-xs font-bold text-white-400 uppercase tracking-widest mb-2">
                         Matrix Properties
@@ -309,7 +328,7 @@ const Sidebar2 = ({ collapsed, toggleSidebar, formValues, onFormChange }) => {
                     </div>
 
                     {/* Packaging Limit Slider */}
-                    <div className="mb-3 pt-2 border-t border-gray-700">
+                    {/* <div className="mb-3 pt-2 border-t border-gray-700">
                         <label className="block text-xs font-semibold text-white-400 mb-1">
                             Packaging Limit (Φ<sub>max</sub>)
                         </label>
@@ -333,6 +352,12 @@ const Sidebar2 = ({ collapsed, toggleSidebar, formValues, onFormChange }) => {
                             <span>0.10</span>
                             <span>0.74</span>
                         </div>
+                    </div> */}
+
+                    <div className="pt-2 border-t border-gray-700">
+                        <p className="text-s font-semibold text-white-400">
+                            Packaging Limit (Φ<sub>max</sub>) = 0.6g/cm<sup>3</sup>
+                        </p>
                     </div>
                 </div>
             )}

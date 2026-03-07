@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import ChartCard from '../components/shared/ChartCard';
 // ADDED: useChartParams to get live sidebar values instead of location.state
+import ChartCarousel from '../components/shared/ChartCarousel';
 import { useChartParams } from '../contexts/ChartParamsContext';
 import { diffScheme } from '../utils/matlabFunctions/diffScheme';
 import { odeRK45 } from '../utils/matlabFunctions/odeRK45';
@@ -152,7 +153,7 @@ const Menu = () => {
             <div className="bg-gray-100 min-h-screen p-6">
                 <h1 className="text-2xl font-semibold text-gray-800 mb-6">Charts Available</h1>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {CHART_CARDS.map((chart) => (
                         <div key={chart.id} className="h-full">
                             <ChartCard
@@ -163,7 +164,11 @@ const Menu = () => {
                             />
                         </div>
                     ))}
-                </div>
+                </div> */}
+
+
+
+                <ChartCarousel CHART_CARDS={CHART_CARDS} ChartCard={ChartCard} handleChartNavigation={handleChartNavigation} />
             </div>
         </React.Fragment>
     );
