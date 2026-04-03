@@ -10,12 +10,26 @@ import YoungModulusCurve from './pages/YoungModulusCurve';
 import YoungModulusCurve2 from './pages/YoungModulusCurve2';
 
 
+import CTEContour from './pages/CTEContour';
+import CTECurve from './pages/CTECurve';
+import DensityCurve from './pages/DensityCurve';
+import DielectricCurve from './pages/DielectricCurve';
+import ModEBardellaGenna from './pages/ModEBardellaGenna';
+import ModEPorfiriGupta from './pages/ModEPorfiriGupta';
+
+
 const App = () => {
   const SIDEBAR_ROUTES = [
     '/charts-menu',
     '/young-modulus-curve',
     '/bulk-modulus-curve',
-    '/shear-modulus-curve'
+    '/shear-modulus-curve',
+    '/cte-curve',
+    '/mode-porfiri-gupta',
+    '/mode-bardella-genna',
+    '/density-curve',
+    '/dielectric-curve',
+    '/cte-contour',
   ];
 
   return (
@@ -30,6 +44,13 @@ const App = () => {
           <Route path='/young-modulus-curve' element={<YoungModulusCurve2 />} />
           <Route path='/bulk-modulus-curve' element={<BulkModulusCurve />} />
           <Route path='/shear-modulus-curve' element={<ShearModulusCurve />} />
+
+          <Route path="/cte-curve" element={<CTECurve />} />
+          <Route path="/mode-porfiri-gupta" element={<ModEPorfiriGupta />} />
+          <Route path="/mode-bardella-genna" element={<ModEBardellaGenna />} />
+          <Route path="/density-curve" element={<DensityCurve />} />
+          <Route path="/dielectric-curve" element={<DielectricCurve />} />
+          <Route path="/cte-contour" element={<CTEContour />} />
         </Routes>
       </Layout>
     </Router>
