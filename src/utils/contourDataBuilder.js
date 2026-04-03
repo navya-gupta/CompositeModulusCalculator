@@ -1,162 +1,275 @@
 /**
  * contourDataBuilder.js
  *
- * Generates the 2D contour datasets used in the Contours tab.
+ * Ports the exact contour logic from Django's cmml_charts.js.
  *
- * The contour fills the full η (0.9 → 1.0) × Φ (0 → 100%) space.
- * For each chart type, we sweep a range of "variant" values (e.g. CTE from 0 → 70),
- * compute the Φ curve for each variant, and return them as contour bands.
+ * HOW CONTOURS WORK (plain English):
+ * ─────────────────────────────────────────────────────────────────────
+ * A contour fills the entire chart area with coloured bands.
+ * Each band = one curve computed at a different "variant" value.
+ * The area BETWEEN consecutive curves is filled with a colour.
  *
- * The overlay line is just a single computed curve from a different chart type,
- * plotted on top as a black line using the current sidebar slider value.
+ * Chart types split into two groups based on their axes:
+ *
+ * GROUP A  — X axis = η (0.9→1.0),  Y axis = Φ % (0→100)
+ *   CTE         : sweep cte  from 0 → +10E-6 per band (10 bands)
+ *   CTE Contour : same as CTE
+ *   Density     : sweep rho  from 650, +30 per band
+ *   Dielectric  : sweep eps  from 2,   +0.2 per band
+ *
+ * GROUP B  — X axis = Φ (0→0.63),  Y axis = Modulus GPa
+ *   MEPG (Porfiri-Gupta)   : sweep η from 0.80, +0.02 per band
+ *   MEBG (Bardella-Genna)  : sweep η from 0.80, +0.02 per band
+ *
+ * Django uses 10 bands for everything (colors array has 10 entries, but
+ * MEPG/MEBG uses 3 colours in the code — we'll use 10 for visual richness).
+ *
+ * The OVERLAY line is a single curve at the current sidebar slider value,
+ * drawn in black on top of the contour bands.
+ * ─────────────────────────────────────────────────────────────────────
  */
 
+import { computeBardellaGenna } from './bardellaGennaCalc';
 import { computeCTE } from './cteCalc';
 import { computeDensity } from './densityCalc';
 import { computeDielectric } from './dielectricCalc';
+import { diffScheme } from './matlabFunctions/diffScheme';
+import { odeRK45 } from './matlabFunctions/odeRK45';
 
-// ─── Contour level definitions ────────────────────────────────────────────────
+// ─── Colour palette (yellow → orange → red, matching Django) ─────────────────
+// Django colours: ["#F4B656","#FDE86E","#F9D063","#F5B857","#F0A04B",
+//                  "#EB8A40","#E77235","#E35B2C","#C74E29","#9D4429"]
+export const BAND_COLORS = [
+    '#FDE86E', // band 0 — lightest yellow
+    '#F9D063',
+    '#F5B857',
+    '#F4B656',
+    '#F0A04B',
+    '#EB8A40',
+    '#E77235',
+    '#E35B2C',
+    '#C74E29',
+    '#9D4429', // band 9 — darkest red
+];
 
-/**
- * For each chart type, define:
- *   - levels: the variant values to sweep (one curve per level)
- *   - colors: gradient palette from light (low) to dark (high)
- *   - label:  display name
- *   - unit:   label shown in legend
- */
-export const CONTOUR_CONFIGS = {
-    cte: {
-        label: 'Coefficient of Thermal Expansion',
-        unit: '×10⁻⁶/°C',
-        levels: [0, 10, 20, 30, 40, 50, 60, 70],
-        colors: [
-            '#ffffcc', // 0
-            '#ffeda0', // 10
-            '#fed976', // 20
-            '#feb24c', // 30
-            '#fd8d3c', // 40
-            '#fc4e2a', // 50
-            '#e31a1c', // 60
-            '#b10026', // 70
-        ],
-    },
-    density: {
-        label: 'Density',
-        unit: 'kg/m³',
-        levels: [200, 400, 600, 800, 1000, 1200, 1400, 1600],
-        colors: [
-            '#ffffcc',
-            '#ffeda0',
-            '#fed976',
-            '#feb24c',
-            '#fd8d3c',
-            '#fc4e2a',
-            '#e31a1c',
-            '#b10026',
-        ],
-    },
-    dielectric: {
-        label: 'Dielectric Constant',
-        unit: '',
-        levels: [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5],
-        colors: [
-            '#ffffcc',
-            '#ffeda0',
-            '#fed976',
-            '#feb24c',
-            '#fd8d3c',
-            '#fc4e2a',
-            '#e31a1c',
-            '#b10026',
-        ],
-    },
-};
-
-// ─── Curve computers ──────────────────────────────────────────────────────────
+// ─── Chart type registry ──────────────────────────────────────────────────────
+export const CONTOUR_CHART_OPTIONS = [
+    { value: 'cte', label: 'Coefficient of Thermal Expansion' },
+    { value: 'mepg', label: 'Modulus of Elasticity | Porfiri Gupta' },
+    { value: 'mebg', label: 'Modulus of Elasticity | Bardella Genna' },
+    { value: 'density', label: 'Density' },
+    { value: 'dielectric', label: 'Dielectric Constant' },
+    { value: 'cte_contour', label: 'Coefficient of Thermal Expansion Contour' },
+];
 
 /**
- * Returns [{eta, phi}, ...] for a given chart type and variant value.
- * Returns null if computation fails or params are invalid.
+ * Returns axis group for a chart type.
+ * 'eta'  → X = η (0.9→1), Y = Φ%
+ * 'phi'  → X = Φ (0→0.63), Y = Modulus GPa
  */
-export function computeOverlayCurve(chartType, variantValue, params) {
+export function getAxisGroup(chartType) {
+    if (chartType === 'mepg' || chartType === 'mebg') return 'phi';
+    return 'eta';
+}
+
+// ─── Band definitions (matches Django JS exactly) ────────────────────────────
+/**
+ * Returns the 10 variant values for each chart type's contour bands.
+ * Django starts at a base and increments per band.
+ */
+function getBandVariants(chartType) {
+    const variants = [];
+    switch (chartType) {
+        case 'cte':
+        case 'cte_contour': {
+            // Django: contour_variant starts at -10E-6, increments +10E-6 each band
+            // So bands are: 0, 10, 20, 30, 40, 50, 60, 70, 80, 90  (×1E-6/°C)
+            let v = 0;
+            for (let i = 0; i < 10; i++) { v += 10; variants.push(v); }
+            break;
+        }
+        case 'mepg':
+        case 'mebg': {
+            // Django: contour_variant starts at 0.80, increments +0.02 per band
+            // Bands: 0.82, 0.84, 0.86, 0.88, 0.90, 0.92, 0.94, 0.96, 0.98, 1.00
+            let v = 0.80;
+            for (let i = 0; i < 10; i++) {
+                v = parseFloat((v + 0.02).toFixed(3));
+                variants.push(v);
+            }
+            break;
+        }
+        case 'density': {
+            // Django: contour_variant starts at 650, increments +30 per band
+            // Bands: 680, 710, 740, 770, 800, 830, 860, 890, 920, 950
+            let v = 650;
+            for (let i = 0; i < 10; i++) { v += 30; variants.push(v); }
+            break;
+        }
+        case 'dielectric': {
+            // Django: contour_variant starts at 2, increments +0.2 per band
+            // Bands: 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0
+            let v = 2.0;
+            for (let i = 0; i < 10; i++) {
+                v = parseFloat((v + 0.2).toFixed(2));
+                variants.push(v);
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    return variants;
+}
+
+// ─── Single curve computers ───────────────────────────────────────────────────
+
+/**
+ * Compute a single curve for the given chart type at a specific variant value.
+ *
+ * Returns:
+ *   Group A (cte/density/dielectric): [{eta, phi}, ...]
+ *   Group B (mepg/mebg):              [{phi, modulus}, ...]
+ *   Returns [] on error.
+ */
+export function computeSingleCurve(chartType, variantValue, params) {
     try {
         switch (chartType) {
             case 'cte':
+            case 'cte_contour':
                 return computeCTE(
-                    variantValue,
-                    params.em, params.nm, params.alpm,
-                    params.eb, params.nb, params.alpf
+                    variantValue,           // cte target ×1E-6/°C (e.g. 40)
+                    params.em, params.nm,
+                    params.alpm,
+                    params.eb, params.nb,
+                    params.alpf
                 );
+
             case 'density':
                 return computeDensity(variantValue, params.dm, params.wpdf);
+
             case 'dielectric':
                 return computeDielectric(variantValue, params.epsm, params.epsf);
+
+            case 'mepg': {
+                // variantValue = η  (e.g. 0.90)
+                const eta = variantValue;
+                if (isNaN(eta) || eta <= 0 || eta >= 1) return [];
+
+                const odefn = (phi, X) => diffScheme(phi, X, params.eb, params.nb, eta, params.phi_rpl);
+                const solution = odeRK45(
+                    odefn,
+                    [0, params.phi_rpl],
+                    [params.em, params.nm],
+                    { dt: 0.001, tol: 1e-8 }
+                );
+
+                const step = 5;
+                return solution.t
+                    .filter((_, i) => i % step === 0)
+                    .map((phi, i) => ({
+                        phi: Math.round(phi * 1000) / 1000,
+                        // Convert MPa → GPa for display
+                        modulus: Math.round((solution.y[i * step]?.[0] ?? 0) / 1000 * 1000) / 1000,
+                    }))
+                    .filter(d => isFinite(d.modulus) && d.modulus > 0);
+            }
+
+            case 'mebg': {
+                // variantValue = η  (e.g. 0.90)
+                const eta = variantValue;
+                const r = params.c2r / 2; // diameter → radius
+                if (isNaN(eta) || eta <= 0 || eta >= 1 || isNaN(r)) return [];
+
+                const raw = computeBardellaGenna(eta, params.em, params.nm, params.eb, params.nb, r);
+                const step = 5;
+                return raw
+                    .filter((_, i) => i % step === 0)
+                    .map(d => ({
+                        phi: d.phi,
+                        modulus: d.E, // Young's modulus in GPa
+                    }))
+                    .filter(d => isFinite(d.modulus) && d.modulus > 0);
+            }
+
             default:
-                return null;
+                return [];
         }
-    } catch {
-        return null;
+    } catch (err) {
+        console.warn(`computeSingleCurve(${chartType}, ${variantValue}) failed:`, err.message);
+        return [];
     }
 }
 
-/**
- * Compute all contour band data for a given chart type.
- * Returns an array of { level, color, data: [{eta, phi}] } objects,
- * one per contour level, sorted from lowest to highest level.
- */
-export function computeContourBands(chartType, params) {
-    const config = CONTOUR_CONFIGS[chartType];
-    if (!config) return [];
+// ─── Full contour dataset builder ─────────────────────────────────────────────
 
-    return config.levels.map((level, i) => {
-        const data = computeOverlayCurve(chartType, level, params);
-        return {
-            level,
-            color: config.colors[i],
-            data: data || [],
-        };
+/**
+ * Build the complete contour dataset for Recharts.
+ *
+ * Returns an object:
+ * {
+ *   axisGroup: 'eta' | 'phi',
+ *   merged: [{xKey: value, band_0: y, band_1: y, ...}],   ← one row per x value
+ *   bands:  [{variant, color, dataKey}],
+ *   xKey:   'eta' | 'phi',
+ *   yLabel: string,
+ *   xLabel: string,
+ * }
+ */
+export function buildContourDataset(chartType, params) {
+    const variants = getBandVariants(chartType);
+    const axisGroup = getAxisGroup(chartType);
+    const xKey = axisGroup === 'eta' ? 'eta' : 'phi';
+
+    // Compute each band's curve
+    const bandCurves = variants.map((variant, i) => {
+        const data = computeSingleCurve(chartType, variant, params);
+        return { variant, color: BAND_COLORS[i], dataKey: `band_${i}`, data };
     });
-}
 
-/**
- * Build a merged dataset suitable for Recharts area chart.
- *
- * Strategy:
- * - X axis: eta (0.9 → 1.0)
- * - For each eta value, we have one phi value per contour level.
- * - We create bands between consecutive levels by using area chart's
- *   dataKey for value and baseValue for lower bound.
- *
- * Returns: { etaPoints, bands }
- *   etaPoints: sorted eta values (x axis)
- *   bands: [{level, color, dataKey, merged: [{eta, phi, prevPhi}]}]
- */
-export function buildContourChartData(chartType, params) {
-    const config = CONTOUR_CONFIGS[chartType];
-    if (!config) return null;
+    // Build merged map: xVal → { xKey: xVal, band_0: y, band_1: y, ... }
+    const xMap = new Map();
 
-    const allBands = computeContourBands(chartType, params);
+    for (const { dataKey, data } of bandCurves) {
+        for (const point of data) {
+            const xVal = xKey === 'eta' ? point.eta : point.phi;
+            const yVal = xKey === 'eta'
+                ? (isFinite(point.phi) ? Math.max(0, Math.min(100, point.phi)) : null)
+                : (isFinite(point.modulus) ? point.modulus : null);
 
-    // Build a map: eta → {level_N: phi}
-    const etaMap = new Map();
-    for (const { level, data } of allBands) {
-        for (const { eta, phi } of data) {
-            if (!etaMap.has(eta)) etaMap.set(eta, { eta });
-            const val = isFinite(phi) ? Math.max(0, Math.min(100, phi)) : null;
-            etaMap.get(eta)[`level_${level}`] = val;
+            if (xVal === undefined || xVal === null) continue;
+            if (!xMap.has(xVal)) xMap.set(xVal, { [xKey]: xVal });
+            xMap.get(xVal)[dataKey] = yVal;
         }
     }
 
-    const merged = Array.from(etaMap.values()).sort((a, b) => a.eta - b.eta);
+    const merged = Array.from(xMap.values()).sort((a, b) => a[xKey] - b[xKey]);
 
     return {
+        axisGroup,
         merged,
-        config,
-        bands: allBands.map((b, i) => ({
-            ...b,
-            dataKey: `level_${b.level}`,
-            // For area stacking: each band fills from previous level's phi up to its own phi
-            baseKey: i === 0 ? null : `level_${allBands[i - 1].level}`,
-        })),
+        bands: bandCurves.map(({ variant, color, dataKey }) => ({ variant, color, dataKey })),
+        xKey,
+        xLabel: axisGroup === 'eta' ? 'This is η' : 'Φ (Volume Fraction)',
+        yLabel: axisGroup === 'eta' ? 'This is Φ (%)' : 'Modulus (GPa)',
+        xDomain: axisGroup === 'eta' ? [0.9, 1.0] : [0, params.phi_rpl ?? 0.6],
+        yDomain: axisGroup === 'eta' ? [0, 100] : null, // null = auto for modulus
     };
+}
+
+/**
+ * Compute the overlay (single black line) curve in Recharts-ready format.
+ * variantValue comes from the current sidebar slider for the overlay chart type.
+ */
+export function buildOverlayCurve(chartType, variantValue, params) {
+    const axisGroup = getAxisGroup(chartType);
+    const xKey = axisGroup === 'eta' ? 'eta' : 'phi';
+    const data = computeSingleCurve(chartType, variantValue, params);
+
+    return data.map(point => ({
+        [xKey]: xKey === 'eta' ? point.eta : point.phi,
+        _overlay: xKey === 'eta'
+            ? (isFinite(point.phi) ? Math.max(0, Math.min(100, point.phi)) : null)
+            : (isFinite(point.modulus) ? point.modulus : null),
+    })).filter(d => d._overlay !== null);
 }
