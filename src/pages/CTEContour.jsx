@@ -102,7 +102,7 @@ const CTEContour = () => {
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
             return (
-                <div className="bg-white p-3 border border-gray-300 rounded shadow-lg min-w-[160px]">
+                <div className="bg-white p-3 border border-gray-300 rounded shadow-lg min-w-40">
                     <p className="font-semibold text-gray-800 mb-1">η: {Number(label).toFixed(4)}</p>
                     {payload.map(p => (
                         <p key={p.dataKey} style={{ color: p.color }} className="text-sm">

@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+.sfdx
+README.md
+src/components/shared/ChartCarousel.jsx
+src/components/shared/ChartCarousel2.jsx

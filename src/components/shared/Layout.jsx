@@ -172,6 +172,7 @@ const Layout = ({ children, sidebarRoutes = [] }) => {
         // Pass through type keys in case charts want to display them
         matrixType: formValues.matrixType,
         hollowType: formValues.hollowType,
+        glassDensity
     };
 
     return (

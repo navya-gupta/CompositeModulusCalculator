@@ -16,6 +16,7 @@ import DensityCurve from './pages/DensityCurve';
 import DielectricCurve from './pages/DielectricCurve';
 import ModEBardellaGenna from './pages/ModEBardellaGenna';
 import ModEPorfiriGupta from './pages/ModEPorfiriGupta';
+import Surface3DPage from './pages/Surface3Dpage';
 
 
 const App = () => {
@@ -24,12 +25,13 @@ const App = () => {
     '/young-modulus-curve',
     '/bulk-modulus-curve',
     '/shear-modulus-curve',
-    '/cte-curve',
-    '/mode-porfiri-gupta',
-    '/mode-bardella-genna',
-    '/density-curve',
-    '/dielectric-curve',
-    '/cte-contour',
+    '/surface-3d'
+    // '/cte-curve',
+    // '/mode-porfiri-gupta',
+    // '/mode-bardella-genna',
+    // '/density-curve',
+    // '/dielectric-curve',
+    // '/cte-contour',
   ];
 
   return (
@@ -45,12 +47,13 @@ const App = () => {
           <Route path='/bulk-modulus-curve' element={<BulkModulusCurve />} />
           <Route path='/shear-modulus-curve' element={<ShearModulusCurve />} />
 
-          <Route path="/cte-curve" element={<CTECurve />} />
+          <Route path='/surface-3d' element={<Surface3DPage />} />
+          {/* <Route path="/cte-curve" element={<CTECurve />} />
           <Route path="/mode-porfiri-gupta" element={<ModEPorfiriGupta />} />
           <Route path="/mode-bardella-genna" element={<ModEBardellaGenna />} />
           <Route path="/density-curve" element={<DensityCurve />} />
           <Route path="/dielectric-curve" element={<DielectricCurve />} />
-          <Route path="/cte-contour" element={<CTEContour />} />
+          <Route path="/cte-contour" element={<CTEContour />} /> */}
         </Routes>
       </Layout>
     </Router>
